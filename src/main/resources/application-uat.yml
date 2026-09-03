@@ -1,0 +1,36 @@
+# Author: Viraj Sachin
+# Created: 2026-09-03
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+spring:
+  config:
+    activate:
+      on-profile: uat
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  datasource:
+    hikari:
+      maximum-pool-size: 25
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI}
+
+logging:
+  level:
+    root: INFO
+    com.nmi.platform.skillexpert: INFO
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  tracing:
+    sampling:
+      probability: 0.2
+
+nmi:
+  skill-expert:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS}

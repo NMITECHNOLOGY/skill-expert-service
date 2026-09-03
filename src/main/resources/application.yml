@@ -1,0 +1,219 @@
+# Author: Viraj Sachin
+# Created: 2026-09-03
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+spring:
+  application:
+    name: skill-expert-service
+  profiles:
+    default: local
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+    datatype:
+      datetime:
+        write-dates-as-timestamps: false
+  messages:
+    basename: messages/messages,messages/validation
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:skill_expert_db_dev}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:Viraj@12345}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: skill-expert-hikari
+      auto-commit: false
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+        connection:
+          provider_disables_autocommit: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+  cache:
+    type: redis
+    redis:
+      time-to-live: 10m
+      cache-null-values: false
+      key-prefix: "skill-expert:"
+  cloud:
+    openfeign:
+      circuitbreaker:
+        enabled: true
+      client:
+        config:
+          default:
+            connectTimeout: 3000
+            readTimeout: 10000
+            loggerLevel: basic
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Use only one of issuer-uri or jwk-set-uri (not both).
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8443}
+
+server:
+  port: ${SERVER_PORT:8089}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+  compression:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,loggers
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: when_authorized
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,redis
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: 1.0
+  observations:
+    key-values:
+      service: ${spring.application.name}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+platform:
+  openapi:
+    title: Skill Expert Service API
+    description: Domain microservice API for the Skill Expert mini app.
+    version: v1
+    contact-name: NMI Platform Engineering
+    contact-email: platform-engineering@nmi.example
+  cache:
+    redis:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.nmi.platform.skillexpert: INFO
+    org.springframework.security: INFO
+  pattern:
+    level: "%5p [${spring.application.name:},%X{correlationId:-},%X{requestId:-}]"
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 20
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 5
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 10s
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 500ms
+
+nmi:
+  skill-expert:
+    application-name: Skill Expert Service
+    api-base-path: /api/v1
+    time-zone:
+      default-zone-id: UTC
+    locale:
+      default-locale: en-US
+      supported-locales:
+        - en-US
+        - en-GB
+    cors:
+      allowed-origins:
+        - http://localhost:8085
+        - http://127.0.0.1:8085
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - "*"
+      exposed-headers:
+        - Authorization
+        - X-Correlation-Id
+        - X-Request-Id
+      allow-credentials: true
+      max-age: 3600
+    security:
+      principal-claim: sub
+      authorities-claim: permissions
+      authority-prefix: ""
+      permit-all-patterns:
+        - /actuator/health
+        - /actuator/health/**
+        - /actuator/info
+        - /actuator/prometheus
+        - /v3/api-docs/**
+        - /swagger-ui/**
+        - /swagger-ui.html
+    downstream:
+      services:
+        authorization:
+          base-url: ${AUTHORIZATION_SERVICE_URL:http://localhost:8443}
+          connect-timeout-ms: 3000
+          read-timeout-ms: 10000
+        loyalty:
+          base-url: ${LOYALTY_SERVICE_URL:http://localhost:8080}
+          connect-timeout-ms: 3000
+          read-timeout-ms: 10000
+        payment:
+          base-url: ${PAYMENT_SERVICE_URL:http://localhost:8088}
+          connect-timeout-ms: 3000
+          read-timeout-ms: 10000
+        notification:
+          base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+          connect-timeout-ms: 3000
+          read-timeout-ms: 10000

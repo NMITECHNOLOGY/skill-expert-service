@@ -1,0 +1,14 @@
+# Author: Viraj Sachin
+# Created: 2026-09-03
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+spring:
+  main:
+    banner-mode: "off"
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+logging:
+  level:
+    root: WARN
+    com.nmi.platform.skillexpert: INFO

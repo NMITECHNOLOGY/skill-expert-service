@@ -1,0 +1,64 @@
+# Author: Viraj Sachin
+# Created: 2026-09-03
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: skill-expert-postgres
+    environment:
+      POSTGRES_DB: skill_expert_db_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Viraj@12345
+    ports:
+      - "5432:5432"
+    volumes:
+      - skill-expert-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d skill_expert_db_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: skill-expert-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - skill-expert-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  skill-expert-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: skill-expert-app
+    profiles: ["app"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: skill_expert_db_dev
+      DB_USER: postgres
+      DB_PASSWORD: Viraj@12345
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      OAUTH2_ISSUER_URI: http://host.docker.internal:8443
+      SERVER_PORT: 8089
+    ports:
+      - "8089:8089"
+
+volumes:
+  skill-expert-postgres-data:
+  skill-expert-redis-data:

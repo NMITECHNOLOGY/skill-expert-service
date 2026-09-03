@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+  Author: Viraj Sachin
+  Created: 2026-09-03
+  Copyright (c) 2026 NMI Infra Pvt Ltd
+-->
+<FindBugsFilter>
+    <!-- Foundation scaffolding; tighten exclusions as features land. -->
+    <Match>
+        <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2"/>
+    </Match>
+</FindBugsFilter>

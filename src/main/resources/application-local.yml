@@ -1,0 +1,40 @@
+# Author: Viraj Sachin
+# Created: 2026-09-03
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+spring:
+  config:
+    activate:
+      on-profile: local
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Must match Auth Service issuer (local Auth listens on 8443).
+          issuer-uri: http://localhost:8443
+
+logging:
+  level:
+    com.nmi.platform.skillexpert: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+nmi:
+  skill-expert:
+    cors:
+      allowed-origins:
+        - http://localhost:8085
+        - http://127.0.0.1:8085
+        - http://localhost:4200
+        - http://127.0.0.1:4200

@@ -13,7 +13,6 @@ target/
 .factorypath
 *.class
 *.jar
-!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.log
 .DS_Store
@@ -28,4 +27,5 @@ coverage/
 .jacoco/
 spotbugsXml.xml
 checkstyle-result.xml
-.mvn/wrapper/maven-wrapper.jar
+.git
+.gitignore

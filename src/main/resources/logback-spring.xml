@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+  Author: Viraj Sachin
+  Created: 2026-09-03
+  Copyright (c) 2026 NMI Infra Pvt Ltd
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="skill-expert-service"/>
+
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [${appName},%X{correlationId:-},%X{requestId:-}] %logger{36} - %msg%n"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+
+    <logger name="com.nmi.platform.skillexpert" level="INFO"/>
+    <logger name="org.springframework.security" level="INFO"/>
+</configuration>
