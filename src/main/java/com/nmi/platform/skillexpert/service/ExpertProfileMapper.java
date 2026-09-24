@@ -49,7 +49,8 @@ public class ExpertProfileMapper {
                 false,
                 null,
                 null,
-                null
+                null,
+                false
         );
     }
 
@@ -78,7 +79,8 @@ public class ExpertProfileMapper {
                     true,
                     revision.getStatus(),
                     profile.getDisplayName(),
-                    profile.getJobTitle()
+                    profile.getJobTitle(),
+                    profile.isAvailable()
             );
         }
         List<String> skills = readSkills(profile.getSkillsJson());
@@ -103,7 +105,8 @@ public class ExpertProfileMapper {
                 live,
                 null,
                 null,
-                null
+                null,
+                profile.isAvailable()
         );
     }
 
@@ -129,7 +132,8 @@ public class ExpertProfileMapper {
                 profile.getStatus() == ExpertProfileStatus.APPROVED,
                 null,
                 null,
-                null
+                null,
+                profile.isAvailable()
         );
     }
 
@@ -157,7 +161,8 @@ public class ExpertProfileMapper {
                     profile.getStatus() == ExpertProfileStatus.APPROVED,
                     revision.getStatus(),
                     profile.getDisplayName(),
-                    profile.getJobTitle()
+                    profile.getJobTitle(),
+                    profile.isAvailable()
             );
         }
         List<String> skills = readSkills(profile.getSkillsJson());
@@ -181,7 +186,8 @@ public class ExpertProfileMapper {
                 profile.getStatus() == ExpertProfileStatus.APPROVED,
                 updateStatus,
                 null,
-                null
+                null,
+                profile.isAvailable()
         );
     }
 
@@ -197,7 +203,8 @@ public class ExpertProfileMapper {
                 profile.getSubmittedAt(),
                 completion(profile.getPhotoUri(), profile.getBio(), skills, profile.getPortfolio(), profile.getServices()),
                 profile.getStatus() == ExpertProfileStatus.APPROVED,
-                null
+                null,
+                profile.isAvailable()
         );
     }
 
@@ -215,7 +222,8 @@ public class ExpertProfileMapper {
                     revision.getSubmittedAt(),
                     completion(revision.getPhotoUri(), revision.getBio(), skills, revision.getPortfolio(), revision.getServices()),
                     profile.getStatus() == ExpertProfileStatus.APPROVED,
-                    revision.getStatus()
+                    revision.getStatus(),
+                    profile.isAvailable()
             );
         }
         List<String> skills = readSkills(profile.getSkillsJson());
@@ -229,7 +237,8 @@ public class ExpertProfileMapper {
                 profile.getSubmittedAt(),
                 completion(profile.getPhotoUri(), profile.getBio(), skills, profile.getPortfolio(), profile.getServices()),
                 profile.getStatus() == ExpertProfileStatus.APPROVED,
-                revision == null ? null : revision.getStatus()
+                revision == null ? null : revision.getStatus(),
+                profile.isAvailable()
         );
     }
 
@@ -450,7 +459,8 @@ public class ExpertProfileMapper {
             boolean liveListing,
             ExpertProfileStatus updateStatus,
             String liveDisplayName,
-            String liveJobTitle) {
+            String liveJobTitle,
+            boolean available) {
         return new ExpertProfileResponse(
                 id,
                 userId,
@@ -470,7 +480,8 @@ public class ExpertProfileMapper {
                 liveListing,
                 updateStatus,
                 liveDisplayName,
-                liveJobTitle
+                liveJobTitle,
+                available
         );
     }
 

@@ -85,6 +85,17 @@ public class ExpertProfileService {
         return mapper.toMine(repository.save(profile));
     }
 
+    @Transactional
+    public ExpertProfileResponse setAvailability(String userId, boolean available) {
+        ExpertProfile profile = repository.findByUserId(userId)
+                .orElseThrow(() -> new BadRequestException("Finish your profile before changing this."));
+        if (profile.getStatus() != ExpertProfileStatus.APPROVED) {
+            throw new ConflictException("You can switch this on after people can see your profile.");
+        }
+        profile.setAvailable(available);
+        return mapper.toMine(repository.save(profile));
+    }
+
     @Transactional(readOnly = true)
     public Page<ExpertProfileSummaryResponse> listApproved(Pageable pageable) {
         return repository.findByStatus(ExpertProfileStatus.APPROVED, pageable).map(mapper::toPublicSummary);

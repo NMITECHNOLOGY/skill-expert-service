@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.nmi.platform.skillexpert.model.dto.AvailabilityRequest;
 import com.nmi.platform.skillexpert.model.dto.ExpertProfileResponse;
 import com.nmi.platform.skillexpert.model.dto.ExpertProfileSummaryResponse;
 import com.nmi.platform.skillexpert.model.dto.ExpertProfileUpdateRequest;
@@ -50,6 +51,11 @@ public class ExpertProfileController {
     @PostMapping("/me/profile/submit")
     public ExpertProfileResponse submit() {
         return service.submit(currentUser.requireUserId());
+    }
+
+    @PutMapping("/me/availability")
+    public ExpertProfileResponse setAvailability(@Valid @RequestBody AvailabilityRequest request) {
+        return service.setAvailability(currentUser.requireUserId(), Boolean.TRUE.equals(request.available()));
     }
 
     @GetMapping

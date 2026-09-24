@@ -37,4 +37,26 @@ public class CurrentUser {
         }
         return jwt.getSubject();
     }
+
+    public String displayName() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !(authentication.getPrincipal() instanceof Jwt jwt)) {
+            return requireUserId();
+        }
+        String given = jwt.getClaimAsString("given_name");
+        String family = jwt.getClaimAsString("family_name");
+        String full = ((given == null ? "" : given) + " " + (family == null ? "" : family)).trim();
+        if (StringUtils.hasText(full)) {
+            return full;
+        }
+        String preferred = jwt.getClaimAsString("preferred_username");
+        if (StringUtils.hasText(preferred)) {
+            return preferred.trim();
+        }
+        String name = jwt.getClaimAsString("name");
+        if (StringUtils.hasText(name)) {
+            return name.trim();
+        }
+        return requireUserId();
+    }
 }
