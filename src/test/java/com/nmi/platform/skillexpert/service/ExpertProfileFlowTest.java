@@ -243,10 +243,110 @@ class ExpertProfileFlowTest {
                 .andExpect(jsonPath("$.liveListing").value(true));
     }
 
+    @Test
+    void expertCanTurnAvailabilityOffWithoutANewReview() throws Exception {
+        RequestPostProcessor member = memberAs("avail-user");
+        MvcResult saved = mockMvc.perform(put("/api/v1/skill-experts/me/profile")
+                        .with(member)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(COMPLETE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true))
+                .andReturn();
+        int id = JsonPath.parse(saved.getResponse().getContentAsString()).read("$.id", Integer.class);
+        mockMvc.perform(post("/api/v1/skill-experts/me/profile/submit").with(member))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/admin/requests/" + id + "/approve").with(admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(true));
+
+        mockMvc.perform(put("/api/v1/skill-experts/me/availability")
+                        .with(member)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"available\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.available").value(false))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+
+        mockMvc.perform(get("/api/v1/skill-experts").with(member))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.userId == 'avail-user')].available").value(hasItem(false)));
+
+        String when = java.time.Instant.now().plusSeconds(86_400).toString();
+        mockMvc.perform(post("/api/v1/skill-experts/" + id + "/bookings")
+                        .with(memberAs("someone-else"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"serviceTitle":"Leak repair","scheduledAt":"%s"}
+                                """.formatted(when)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This expert is not free right now."));
+    }
+
+    @Test
+    void customerRequestShowsOnTheExpertBookings() throws Exception {
+        RequestPostProcessor expert = memberAs("book-expert");
+        RequestPostProcessor customer = jwt().jwt(builder -> builder
+                .subject("book-customer")
+                .claim("user_id", "book-customer")
+                .claim("given_name", "Nimal")
+                .claim("family_name", "Perera")
+                .claim("kyc_status", "VERIFIED"));
+
+        MvcResult saved = mockMvc.perform(put("/api/v1/skill-experts/me/profile")
+                        .with(expert)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(COMPLETE))
+                .andExpect(status().isOk())
+                .andReturn();
+        int profileId = JsonPath.parse(saved.getResponse().getContentAsString()).read("$.id", Integer.class);
+        mockMvc.perform(post("/api/v1/skill-experts/me/profile/submit").with(expert))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/admin/requests/" + profileId + "/approve").with(admin()))
+                .andExpect(status().isOk());
+
+        String when = java.time.Instant.now().plusSeconds(86_400).toString();
+        MvcResult booked = mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "serviceTitle": "Leak repair",
+                                  "price": "LKR 2500",
+                                  "address": "Park Road",
+                                  "note": "Kitchen leak",
+                                  "scheduledAt": "%s"
+                                }
+                                """.formatted(when)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REQUESTED"))
+                .andExpect(jsonPath("$.customerName").value("Nimal Perera"))
+                .andReturn();
+        int bookingId = JsonPath.parse(booked.getResponse().getContentAsString()).read("$.id", Integer.class);
+
+        mockMvc.perform(get("/api/v1/skill-experts/me/bookings").with(expert))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].serviceTitle").value("Leak repair"))
+                .andExpect(jsonPath("$[0].status").value("REQUESTED"));
+
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(expert))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        mockMvc.perform(get("/api/v1/skill-experts/bookings/mine").with(customer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].status").value("CONFIRMED"))
+                .andExpect(jsonPath("$[0].expertName").value("Ada"));
+    }
+
     private static RequestPostProcessor member() {
+        return memberAs(USER);
+    }
+
+    private static RequestPostProcessor memberAs(String userId) {
         return jwt().jwt(builder -> builder
-                .subject(USER)
-                .claim("user_id", USER)
+                .subject(userId)
+                .claim("user_id", userId)
                 .claim("kyc_status", "VERIFIED"));
     }
 

@@ -1,0 +1,2 @@
+ALTER TABLE expert_profiles
+    ADD COLUMN available BOOLEAN NOT NULL DEFAULT TRUE;

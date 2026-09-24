@@ -14,5 +14,6 @@ public record ExpertProfileSummaryResponse(
         Instant submittedAt,
         int completionPercent,
         boolean liveListing,
-        ExpertProfileStatus updateStatus
+        ExpertProfileStatus updateStatus,
+        boolean available
 ) {}

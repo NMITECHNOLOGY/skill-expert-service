@@ -74,6 +74,10 @@ public class ExpertProfile {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Expert can turn this off without sending the profile for review again. */
+    @Column(name = "available", nullable = false)
+    private boolean available = true;
+
     @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC, id ASC")
     private List<ExpertPortfolioItem> portfolio = new ArrayList<>();

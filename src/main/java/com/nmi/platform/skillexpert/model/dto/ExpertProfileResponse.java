@@ -24,7 +24,8 @@ public record ExpertProfileResponse(
         boolean liveListing,
         ExpertProfileStatus updateStatus,
         String liveDisplayName,
-        String liveJobTitle
+        String liveJobTitle,
+        boolean available
 ) {
     public record PortfolioItemResponse(Long id, String mediaUri, String caption, int sortOrder) {}
     public record ServiceItemResponse(Long id, String title, String price, String description, int sortOrder) {}
