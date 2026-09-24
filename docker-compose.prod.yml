@@ -1,0 +1,35 @@
+# Required environment (shell or .env next to this file):
+#   EUREKA_USERNAME / EUREKA_PASSWORD   registry credentials
+#   JWT_ISSUER_URI                      public issuer, e.g. https://api.example.com/auth
+services:
+  skill-expert-service:
+    image: nmitecstack/skill-expert-service:latest
+    container_name: skill-expert-service
+    restart: unless-stopped
+    pull_policy: always
+    # Reached only through the gateway; no host port.
+    expose:
+      - "8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: prod
+      EUREKA_SERVER_URL: http://${EUREKA_USERNAME:?set EUREKA_USERNAME}:${EUREKA_PASSWORD:?set EUREKA_PASSWORD}@eureka-server:8761/eureka/
+      JWT_ISSUER_URI: ${JWT_ISSUER_URI:?set JWT_ISSUER_URI}
+      # Key set fetched service-to-service, never via the public edge.
+      JWT_JWK_SET_URI: http://nmi-auth-service:8080/oauth2/jwks
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/liveness || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    networks:
+      - superapp_network
+
+networks:
+  superapp_network:
+    external: true
