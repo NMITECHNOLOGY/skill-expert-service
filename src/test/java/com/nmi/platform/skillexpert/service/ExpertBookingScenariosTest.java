@@ -70,6 +70,86 @@ class ExpertBookingScenariosTest {
     }
 
     @Test
+    void expertCannotRequestThemselvesWhenOnlyTheTokenSubjectMatches() throws Exception {
+        int profileId = approve("self-subject");
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(jwt().jwt(builder -> builder
+                                .subject("self-subject")
+                                .claim("user_id", "different-account")
+                                .claim("kyc_status", "VERIFIED")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", future())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("You cannot request yourself."));
+    }
+
+    @Test
+    void expertCannotRequestThemselvesWhenTheUserIdOnlyDiffersByCase() throws Exception {
+        int profileId = approve("Case-Expert");
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(member("case-expert"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", future())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("You cannot request yourself."));
+    }
+
+    @Test
+    void registeredExpertCannotBookSomeoneDuringTheirOwnJob() throws Exception {
+        String when = future();
+        int ownProfile = approve("dual-expert");
+        int otherProfile = approve("other-trade");
+        mockMvc.perform(post("/api/v1/skill-experts/" + ownProfile + "/bookings")
+                        .with(customer("neighbour", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/skill-experts/" + otherProfile + "/bookings")
+                        .with(member("dual-expert"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("You already have a job at that time."));
+    }
+
+    @Test
+    void cannotBookAnExpertWhoIsOutOnTheirOwnVisit() throws Exception {
+        String when = future();
+        int visitor = approve("out-expert");
+        int host = approve("home-expert");
+        mockMvc.perform(post("/api/v1/skill-experts/" + host + "/bookings")
+                        .with(member("out-expert"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/skill-experts/" + visitor + "/bookings")
+                        .with(customer("third-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This expert is already booked at that time."));
+
+        mockMvc.perform(get("/api/v1/skill-experts/" + visitor + "/bookings/taken")
+                        .with(customer("third-seeker", "VERIFIED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void anExpertCanStillBookADifferentExpertAtAFreeTime() throws Exception {
+        int otherProfile = approve("free-other");
+        approve("free-self");
+        mockMvc.perform(post("/api/v1/skill-experts/" + otherProfile + "/bookings")
+                        .with(member("free-self"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", future())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REQUESTED"));
+    }
+
+    @Test
     void pastTimeIsRejected() throws Exception {
         int profileId = approve("future-expert");
         mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
@@ -78,6 +158,125 @@ class ExpertBookingScenariosTest {
                         .content(body("Leak repair", Instant.now().minusSeconds(120).toString())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Pick a future time."));
+    }
+
+    @Test
+    void theSameExpertCannotBeBookedTwiceAtTheSameTime() throws Exception {
+        String when = future();
+        int profileId = approve("busy-expert");
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("busy-seeker-a", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("busy-seeker-b", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This expert is already booked at that time."));
+
+        mockMvc.perform(get("/api/v1/skill-experts/" + profileId + "/bookings/taken")
+                        .with(customer("busy-seeker-b", "VERIFIED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void aVisitInsideTheSameHourIsAlsoRejected() throws Exception {
+        Instant start = Instant.now().plusSeconds(86_400);
+        int profileId = approve("hour-expert");
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("hour-seeker-a", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", start.toString())))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("hour-seeker-b", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", start.plusSeconds(30 * 60).toString())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This expert is already booked at that time."));
+    }
+
+    @Test
+    void onePersonCannotHoldTwoBookingsAtTheSameTime() throws Exception {
+        String when = future();
+        int first = approve("place-expert-a");
+        int second = approve("place-expert-b");
+        mockMvc.perform(post("/api/v1/skill-experts/" + first + "/bookings")
+                        .with(customer("two-places", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/" + second + "/bookings")
+                        .with(customer("two-places", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("You already have a booking at that time."));
+    }
+
+    @Test
+    void cancellingOpensTheTimeAgain() throws Exception {
+        String when = future();
+        int profileId = approve("reopen-expert");
+        MvcResult booked = mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("reopen-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isOk())
+                .andReturn();
+        int bookingId = JsonPath.parse(booked.getResponse().getContentAsString()).read("$.id", Integer.class);
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/cancel")
+                        .with(customer("reopen-seeker", "VERIFIED")))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("reopen-next", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", when)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REQUESTED"));
+    }
+
+    @Test
+    void addressServiceAndHorizonAreChecked() throws Exception {
+        int profileId = approve("rules-expert");
+        String when = future();
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("rules-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"serviceTitle":"Leak repair","scheduledAt":"%s"}
+                                """.formatted(when)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Add the address where they should come."));
+
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("rules-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"serviceTitle":"Roof tiles","address":"12 Galle Road","scheduledAt":"%s"}
+                                """.formatted(when)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Pick one of this expert's services."));
+
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("rules-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"serviceTitle":"Leak repair","price":"LKR 10","address":"12 Galle Road","scheduledAt":"%s"}
+                                """.formatted(when)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("That price does not match this service."));
+
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("rules-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Leak repair", Instant.now().plusSeconds(40L * 24 * 60 * 60).toString())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Pick a time within the next 30 days."));
     }
 
     @Test
@@ -167,6 +366,129 @@ class ExpertBookingScenariosTest {
         mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/cancel").with(customer("done-seeker", "VERIFIED")))
                 .andExpect(status().isConflict());
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/decline").with(member(expertId)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void expertFinishesAPricedBookingOnlyAfterTheCustomerPays() throws Exception {
+        String expertId = "paid-done-expert";
+        int profileId = approve(expertId);
+        MvcResult booked = mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("paid-done-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"serviceTitle":"Leak repair","price":"LKR 2500","address":"12 Galle Road","scheduledAt":"%s"}
+                                """.formatted(future())))
+                .andExpect(status().isOk())
+                .andReturn();
+        int bookingId = JsonPath.parse(booked.getResponse().getContentAsString()).read("$.id", Integer.class);
+
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(member(expertId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/complete").with(member(expertId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The customer has not paid yet."));
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("paid-done-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-300\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/complete").with(member(expertId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"));
+    }
+
+    @Test
+    void customerRecordsTheSuperAppPaymentAfterTheExpertConfirms() throws Exception {
+        String expertId = "pay-expert";
+        int profileId = approve(expertId);
+        int bookingId = request(profileId, "pay-seeker");
+
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("pay-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-100\"}"))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(member(expertId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("pay-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-100\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentReference").value("PAY-100"))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("pay-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-100\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.paymentReference").value("PAY-100"));
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/cancel").with(customer("pay-seeker", "VERIFIED")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This booking is already paid."));
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("pay-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-OTHER\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This booking is already paid."));
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("someone-else", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-100\"}"))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer("pay-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"\"}"))
+                .andExpect(status().isBadRequest());
+
+        int second = request(profileId, "pay-seeker");
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + second + "/accept").with(member(expertId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + second + "/payment")
+                        .with(customer("pay-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-100\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This payment is already linked to a booking."));
+    }
+
+    @Test
+    void declinedOrFinishedBookingsCannotBePaid() throws Exception {
+        String expertId = "pay-closed-expert";
+        int profileId = approve(expertId);
+
+        int declined = request(profileId, "pay-closed-seeker");
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + declined + "/decline").with(member(expertId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + declined + "/payment")
+                        .with(customer("pay-closed-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-200\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Pay only after the expert confirms the request."));
+
+        int finished = request(profileId, "pay-closed-seeker");
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + finished + "/accept").with(member(expertId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + finished + "/complete").with(member(expertId)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + finished + "/payment")
+                        .with(customer("pay-closed-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-201\"}"))
+                .andExpect(status().isConflict());
+
+        int cancelled = request(profileId, "pay-closed-seeker");
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + cancelled + "/cancel").with(customer("pay-closed-seeker", "VERIFIED")))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + cancelled + "/payment")
+                        .with(customer("pay-closed-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-202\"}"))
                 .andExpect(status().isConflict());
     }
 
@@ -289,13 +611,17 @@ class ExpertBookingScenariosTest {
         return JsonPath.parse(booked.getResponse().getContentAsString()).read("$.id", Integer.class);
     }
 
-    private static String future() {
-        return Instant.now().plusSeconds(86_400).toString();
+    private int hoursAhead = 24;
+
+    /** Each call is two hours later, so separate visits in one test do not overlap. */
+    private String future() {
+        hoursAhead += 2;
+        return Instant.now().plus(java.time.Duration.ofHours(hoursAhead)).toString();
     }
 
     private static String body(String serviceTitle, String when) {
         return """
-                {"serviceTitle":"%s","scheduledAt":"%s"}
+                {"serviceTitle":"%s","address":"12 Galle Road","scheduledAt":"%s"}
                 """.formatted(serviceTitle, when);
     }
 

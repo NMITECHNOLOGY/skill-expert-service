@@ -11,5 +11,6 @@ public record CreateBookingRequest(
         @Size(max = 64) String price,
         @Size(max = 500) String address,
         @Size(max = 1000) String note,
-        @NotNull Instant scheduledAt
+        @NotNull Instant scheduledAt,
+        @Size(max = 200) String customerName
 ) {}

@@ -1,5 +1,6 @@
 package com.nmi.platform.skillexpert.controller;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.springframework.validation.annotation.Validated;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.nmi.platform.skillexpert.model.dto.BookingResponse;
 import com.nmi.platform.skillexpert.model.dto.CreateBookingRequest;
+import com.nmi.platform.skillexpert.model.dto.RecordBookingPaymentRequest;
 import com.nmi.platform.skillexpert.security.CurrentUser;
 import com.nmi.platform.skillexpert.service.ExpertBookingService;
 
@@ -33,7 +35,18 @@ public class ExpertBookingController {
 
     @PostMapping("/{profileId}/bookings")
     public BookingResponse create(@PathVariable Long profileId, @Valid @RequestBody CreateBookingRequest request) {
-        return service.create(currentUser.requireUserId(), currentUser.displayName(), profileId, request);
+        return service.create(
+                currentUser.requireUserId(),
+                currentUser.identityKeys(),
+                currentUser.displayName(),
+                profileId,
+                request);
+    }
+
+    @GetMapping("/{profileId}/bookings/taken")
+    public List<Instant> taken(@PathVariable Long profileId) {
+        currentUser.requireUserId();
+        return service.takenTimes(profileId);
     }
 
     @GetMapping("/bookings/mine")
@@ -44,6 +57,13 @@ public class ExpertBookingController {
     @PostMapping("/bookings/{id}/cancel")
     public BookingResponse cancel(@PathVariable Long id) {
         return service.cancel(currentUser.requireUserId(), id);
+    }
+
+    @PostMapping("/bookings/{id}/payment")
+    public BookingResponse recordPayment(
+            @PathVariable Long id,
+            @Valid @RequestBody RecordBookingPaymentRequest request) {
+        return service.recordPayment(currentUser.requireUserId(), id, request);
     }
 
     @GetMapping("/me/bookings")

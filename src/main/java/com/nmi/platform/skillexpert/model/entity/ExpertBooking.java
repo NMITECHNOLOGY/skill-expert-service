@@ -59,6 +59,10 @@ public class ExpertBooking {
     @Column(name = "status", nullable = false, length = 32)
     private BookingStatus status = BookingStatus.REQUESTED;
 
+    /** Platform payment reference after the customer pays through the super app checkout. */
+    @Column(name = "payment_reference", length = 64)
+    private String paymentReference;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

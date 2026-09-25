@@ -17,5 +17,7 @@ public record BookingResponse(
         String note,
         Instant scheduledAt,
         BookingStatus status,
-        Instant createdAt
+        Instant createdAt,
+        String paymentReference,
+        String merchantId
 ) {}
