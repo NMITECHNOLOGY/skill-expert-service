@@ -12,6 +12,11 @@ spring:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
+
+nmi:
+  skill-expert:
+    merchant-id: 22222222-2222-4222-8222-222222222222
+
 eureka:
   client:
     enabled: false
