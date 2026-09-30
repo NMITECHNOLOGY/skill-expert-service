@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.nmi.platform.skillexpert.model.dto.BookingResponse;
 import com.nmi.platform.skillexpert.model.dto.CreateBookingRequest;
+import com.nmi.platform.skillexpert.model.dto.ProposeBookingRequest;
 import com.nmi.platform.skillexpert.model.dto.RecordBookingPaymentRequest;
 import com.nmi.platform.skillexpert.security.CurrentUser;
 import com.nmi.platform.skillexpert.service.ExpertBookingService;
@@ -54,6 +55,11 @@ public class ExpertBookingController {
         return service.listForCustomer(currentUser.requireUserId());
     }
 
+    @PostMapping("/bookings/{id}/accept-proposal")
+    public BookingResponse acceptProposal(@PathVariable Long id) {
+        return service.acceptProposal(currentUser.requireUserId(), id);
+    }
+
     @PostMapping("/bookings/{id}/cancel")
     public BookingResponse cancel(@PathVariable Long id) {
         return service.cancel(currentUser.requireUserId(), id);
@@ -69,6 +75,11 @@ public class ExpertBookingController {
     @GetMapping("/me/bookings")
     public List<BookingResponse> incoming() {
         return service.listForExpert(currentUser.requireUserId());
+    }
+
+    @PutMapping("/me/bookings/{id}/proposal")
+    public BookingResponse propose(@PathVariable Long id, @Valid @RequestBody ProposeBookingRequest request) {
+        return service.propose(currentUser.requireUserId(), id, request);
     }
 
     @PutMapping("/me/bookings/{id}/accept")

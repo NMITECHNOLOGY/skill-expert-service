@@ -19,12 +19,14 @@ import org.springframework.util.StringUtils;
 
 import com.nmi.platform.skillexpert.model.dto.BookingResponse;
 import com.nmi.platform.skillexpert.model.dto.CreateBookingRequest;
+import com.nmi.platform.skillexpert.model.dto.ProposeBookingRequest;
 import com.nmi.platform.skillexpert.model.dto.RecordBookingPaymentRequest;
 import com.nmi.platform.skillexpert.model.entity.ExpertBooking;
 import com.nmi.platform.skillexpert.model.entity.ExpertProfile;
 import com.nmi.platform.skillexpert.model.entity.ExpertServiceItem;
 import com.nmi.platform.skillexpert.model.enums.BookingStatus;
 import com.nmi.platform.skillexpert.model.enums.ExpertProfileStatus;
+import com.nmi.platform.skillexpert.model.enums.RequestKind;
 import com.nmi.platform.skillexpert.repository.ExpertBookingRepository;
 import com.nmi.platform.skillexpert.repository.ExpertProfileRepository;
 import com.nmi.platform.skillexpert.web.BadRequestException;
@@ -41,6 +43,7 @@ public class ExpertBookingService {
     private static final Pattern AMOUNT = Pattern.compile("(\\d+(?:\\.\\d+)?)");
     private static final Set<BookingStatus> HOLDING_THE_SLOT = EnumSet.of(
             BookingStatus.REQUESTED,
+            BookingStatus.PROPOSED,
             BookingStatus.CONFIRMED);
 
     private final ExpertBookingRepository bookings;
@@ -86,17 +89,26 @@ public class ExpertBookingService {
             throw new BadRequestException("Add the address where they should come.");
         }
         String serviceTitle = request.serviceTitle().trim();
-        assertKnownService(profile, serviceTitle, request.price());
+        boolean custom = Boolean.TRUE.equals(request.custom());
+        String note = blankToNull(request.note());
+        if (custom) {
+            if (note == null) {
+                throw new BadRequestException("Describe what you need.");
+            }
+        } else {
+            assertKnownService(profile, serviceTitle, request.price());
+        }
         assertCreateSlot(profile, customerUserId, when);
         ExpertBooking booking = new ExpertBooking();
         booking.setProfile(profile);
         booking.setCustomerUserId(customerUserId);
         booking.setCustomerName(trimTo(preferredCustomerName(request.customerName(), customerName), 200, "Customer"));
         booking.setServiceTitle(serviceTitle);
-        booking.setPrice(blankToNull(request.price()));
+        booking.setPrice(custom ? null : blankToNull(request.price()));
         booking.setAddress(address);
-        booking.setNote(blankToNull(request.note()));
+        booking.setNote(note);
         booking.setScheduledAt(request.scheduledAt());
+        booking.setRequestKind(custom ? RequestKind.CUSTOM : RequestKind.CATALOG);
         booking.setStatus(BookingStatus.REQUESTED);
         return toResponse(bookings.save(booking));
     }
@@ -135,11 +147,57 @@ public class ExpertBookingService {
         if (sameUser(booking.getCustomerUserId(), booking.getProfile().getUserId())) {
             throw new BadRequestException("You cannot request yourself.");
         }
+        if (booking.getRequestKind() == RequestKind.CUSTOM) {
+            throw new ConflictException("Send a price before this job can be confirmed.");
+        }
         if (booking.getStatus() != BookingStatus.REQUESTED) {
             throw new ConflictException("This request is no longer waiting for that step.");
         }
         assertAcceptSlot(booking);
         return transition(booking, BookingStatus.REQUESTED, BookingStatus.CONFIRMED);
+    }
+
+    @Transactional
+    public BookingResponse propose(String expertUserId, Long bookingId, ProposeBookingRequest request) {
+        ExpertBooking booking = loadForExpert(expertUserId, bookingId);
+        if (booking.getRequestKind() != RequestKind.CUSTOM) {
+            throw new ConflictException("A listed service does not need a separate offer.");
+        }
+        if (booking.getStatus() != BookingStatus.REQUESTED && booking.getStatus() != BookingStatus.PROPOSED) {
+            throw new ConflictException("This request is no longer waiting for an offer.");
+        }
+        if (amountOf(request.price()) == null || amountOf(request.price()).signum() <= 0) {
+            throw new BadRequestException("Enter a price greater than zero.");
+        }
+        Instant when = request.scheduledAt();
+        if (!when.isAfter(Instant.now())) {
+            throw new BadRequestException("Pick a future time.");
+        }
+        if (when.isAfter(Instant.now().plus(HORIZON))) {
+            throw new BadRequestException("Pick a time within the next 30 days.");
+        }
+        booking.setPrice(request.price().trim());
+        booking.setProposalNote(request.note().trim());
+        booking.setProposedAt(Instant.now());
+        booking.setScheduledAt(when);
+        assertAcceptSlot(booking);
+        booking.setStatus(BookingStatus.PROPOSED);
+        return toResponse(bookings.save(booking));
+    }
+
+    @Transactional
+    public BookingResponse acceptProposal(String customerUserId, Long bookingId) {
+        ExpertBooking booking = bookings.findById(bookingId)
+                .orElseThrow(() -> new NotFoundException("Booking not found"));
+        if (!booking.getCustomerUserId().equals(customerUserId)) {
+            throw new NotFoundException("Booking not found");
+        }
+        if (booking.getStatus() != BookingStatus.PROPOSED) {
+            throw new ConflictException("There is no offer waiting for you.");
+        }
+        assertAcceptSlot(booking);
+        booking.setStatus(BookingStatus.CONFIRMED);
+        return toResponse(bookings.save(booking));
     }
 
     @Transactional
@@ -170,7 +228,9 @@ public class ExpertBookingService {
         if (StringUtils.hasText(booking.getPaymentReference())) {
             throw new ConflictException("This booking is already paid.");
         }
-        if (booking.getStatus() != BookingStatus.REQUESTED && booking.getStatus() != BookingStatus.CONFIRMED) {
+        if (booking.getStatus() != BookingStatus.REQUESTED
+                && booking.getStatus() != BookingStatus.PROPOSED
+                && booking.getStatus() != BookingStatus.CONFIRMED) {
             throw new ConflictException("This request can no longer be cancelled.");
         }
         booking.setStatus(BookingStatus.CANCELLED);
@@ -319,7 +379,10 @@ public class ExpertBookingService {
                 booking.getStatus(),
                 booking.getCreatedAt(),
                 booking.getPaymentReference(),
-                merchantId
+                merchantId,
+                booking.getRequestKind() != null ? booking.getRequestKind() : RequestKind.CATALOG,
+                booking.getProposalNote(),
+                booking.getProposedAt()
         );
     }
 

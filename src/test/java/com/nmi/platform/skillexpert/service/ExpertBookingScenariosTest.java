@@ -1,5 +1,6 @@
 package com.nmi.platform.skillexpert.service;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -585,6 +586,66 @@ class ExpertBookingScenariosTest {
                 .andExpect(jsonPath("$.status").value("REQUESTED"));
     }
 
+    @Test
+    void customRequestWaitsForAnOfferBeforePayment() throws Exception {
+        int profileId = approve("offer-expert");
+        mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("offer-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(customBody("Kitchen tap is leaking", "", future())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Describe what you need."));
+
+        String asked = future();
+        MvcResult booked = mockMvc.perform(post("/api/v1/skill-experts/" + profileId + "/bookings")
+                        .with(customer("offer-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(customBody("Kitchen tap is leaking", "Water under the sink since yesterday", asked)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("REQUESTED"))
+                .andExpect(jsonPath("$.requestKind").value("CUSTOM"))
+                .andExpect(jsonPath("$.price").value(nullValue()))
+                .andReturn();
+        int id = JsonPath.parse(booked.getResponse().getContentAsString()).read("$.id", Integer.class);
+
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + id + "/accept").with(member("offer-expert")))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + id + "/payment")
+                        .with(customer("offer-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"pay-too-soon\"}"))
+                .andExpect(status().isConflict());
+
+        String offered = future();
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + id + "/proposal")
+                        .with(member("offer-expert"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"price":"LKR 4500","note":"I will replace the washer and check the trap.","scheduledAt":"%s"}
+                                """.formatted(offered)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PROPOSED"))
+                .andExpect(jsonPath("$.price").value("LKR 4500"))
+                .andExpect(jsonPath("$.proposalNote").value("I will replace the washer and check the trap."));
+
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + id + "/payment")
+                        .with(customer("offer-seeker", "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"pay-before-accept\"}"))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + id + "/accept-proposal")
+                        .with(customer("offer-seeker", "VERIFIED")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+
+        int catalogId = request(profileId, "catalog-seeker");
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + catalogId + "/accept").with(member("offer-expert")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CONFIRMED"))
+                .andExpect(jsonPath("$.requestKind").value("CATALOG"));
+    }
+
     private int approve(String userId) throws Exception {
         RequestPostProcessor expert = member(userId);
         MvcResult saved = mockMvc.perform(put("/api/v1/skill-experts/me/profile")
@@ -617,6 +678,12 @@ class ExpertBookingScenariosTest {
     private String future() {
         hoursAhead += 2;
         return Instant.now().plus(java.time.Duration.ofHours(hoursAhead)).toString();
+    }
+
+    private static String customBody(String title, String note, String when) {
+        return """
+                {"serviceTitle":"%s","note":"%s","address":"12 Galle Road","scheduledAt":"%s","custom":true}
+                """.formatted(title, note, when);
     }
 
     private static String body(String serviceTitle, String when) {
