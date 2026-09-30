@@ -15,5 +15,29 @@ public record ExpertProfileSummaryResponse(
         int completionPercent,
         boolean liveListing,
         ExpertProfileStatus updateStatus,
-        boolean available
-) {}
+        boolean available,
+        Double rating,
+        int reviewCount,
+        long completedJobs,
+        Integer responseRate
+) {
+    public ExpertProfileSummaryResponse withClientReviews(ReviewSummaryResponse stats) {
+        ReviewSummaryResponse value = stats == null ? ReviewSummaryResponse.empty() : stats;
+        return new ExpertProfileSummaryResponse(
+                id,
+                userId,
+                displayName,
+                jobTitle,
+                photoUri,
+                status,
+                submittedAt,
+                completionPercent,
+                liveListing,
+                updateStatus,
+                available,
+                value.rating(),
+                value.reviewCount(),
+                value.completedJobs(),
+                value.responseRate());
+    }
+}

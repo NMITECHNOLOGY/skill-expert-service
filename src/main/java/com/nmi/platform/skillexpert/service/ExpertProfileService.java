@@ -2,6 +2,7 @@ package com.nmi.platform.skillexpert.service;
 
 import java.time.Instant;
 import java.util.EnumSet;
+import java.util.Map;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +14,7 @@ import com.nmi.platform.skillexpert.model.dto.ExpertProfileResponse;
 import com.nmi.platform.skillexpert.model.dto.ExpertProfileSummaryResponse;
 import com.nmi.platform.skillexpert.model.dto.ExpertProfileUpdateRequest;
 import com.nmi.platform.skillexpert.model.dto.ExpertReviewRequest;
+import com.nmi.platform.skillexpert.model.dto.ReviewSummaryResponse;
 import com.nmi.platform.skillexpert.model.entity.ExpertPortfolioItem;
 import com.nmi.platform.skillexpert.model.entity.ExpertProfile;
 import com.nmi.platform.skillexpert.model.entity.ExpertProfileRevision;
@@ -33,16 +35,21 @@ public class ExpertProfileService {
 
     private final ExpertProfileRepository repository;
     private final ExpertProfileMapper mapper;
+    private final BookingReviewService reviews;
 
-    public ExpertProfileService(ExpertProfileRepository repository, ExpertProfileMapper mapper) {
+    public ExpertProfileService(
+            ExpertProfileRepository repository,
+            ExpertProfileMapper mapper,
+            BookingReviewService reviews) {
         this.repository = repository;
         this.mapper = mapper;
+        this.reviews = reviews;
     }
 
     @Transactional(readOnly = true)
     public ExpertProfileResponse getMine(String userId) {
         return repository.findByUserId(userId)
-                .map(mapper::toMine)
+                .map(this::mine)
                 .orElseGet(() -> mapper.emptyMine(userId));
     }
 
@@ -50,7 +57,7 @@ public class ExpertProfileService {
     public ExpertProfileResponse saveDraft(String userId, ExpertProfileUpdateRequest request) {
         ExpertProfile profile = loadOrCreate(userId);
         if (profile.getStatus() == ExpertProfileStatus.APPROVED) {
-            return mapper.toMine(saveApprovedEdit(profile, request));
+            return mine(saveApprovedEdit(profile, request));
         }
         if (profile.getStatus() == ExpertProfileStatus.PENDING) {
             throw new ConflictException("Profile is under review and cannot be edited");
@@ -61,7 +68,7 @@ public class ExpertProfileService {
             profile.setStatus(ExpertProfileStatus.DRAFT);
         }
         profile.setReviewNote(null);
-        return mapper.toMine(repository.save(profile));
+        return mine(repository.save(profile));
     }
 
     @Transactional
@@ -69,7 +76,7 @@ public class ExpertProfileService {
         ExpertProfile profile = repository.findByUserId(userId)
                 .orElseThrow(() -> new BadRequestException("Save a draft before submitting."));
         if (profile.getStatus() == ExpertProfileStatus.APPROVED) {
-            return mapper.toMine(submitApprovedEdit(profile));
+            return mine(submitApprovedEdit(profile));
         }
         if (profile.getStatus() == ExpertProfileStatus.PENDING) {
             throw new ConflictException("Profile is under review and cannot be edited");
@@ -82,7 +89,7 @@ public class ExpertProfileService {
         profile.setReviewedAt(null);
         profile.setReviewedBy(null);
         profile.setReviewNote(null);
-        return mapper.toMine(repository.save(profile));
+        return mine(repository.save(profile));
     }
 
     @Transactional
@@ -93,12 +100,16 @@ public class ExpertProfileService {
             throw new ConflictException("You can switch this on after people can see your profile.");
         }
         profile.setAvailable(available);
-        return mapper.toMine(repository.save(profile));
+        return mine(repository.save(profile));
     }
 
     @Transactional(readOnly = true)
     public Page<ExpertProfileSummaryResponse> listApproved(Pageable pageable) {
-        return repository.findByStatus(ExpertProfileStatus.APPROVED, pageable).map(mapper::toPublicSummary);
+        Page<ExpertProfile> found = repository.findByStatus(ExpertProfileStatus.APPROVED, pageable);
+        Map<Long, ReviewSummaryResponse> stats = reviews.summaries(
+                found.getContent().stream().map(ExpertProfile::getId).toList());
+        return found.map(profile -> mapper.toPublicSummary(profile)
+                .withClientReviews(stats.getOrDefault(profile.getId(), ReviewSummaryResponse.empty())));
     }
 
     @Transactional(readOnly = true)
@@ -108,25 +119,29 @@ public class ExpertProfileService {
         if (profile.getStatus() != ExpertProfileStatus.APPROVED) {
             throw new NotFoundException("Expert profile not found");
         }
-        return mapper.toPublic(profile);
+        return mapper.toPublic(profile).withClientReviews(reviews.summary(profile.getId()));
     }
 
     @Transactional(readOnly = true)
     public Page<ExpertProfileSummaryResponse> adminList(String status, String search, Pageable pageable) {
         ExpertProfileStatus parsed = parseStatus(status);
         String term = StringUtils.hasText(search) ? search.trim() : null;
-        return repository.searchAdmin(
+        Page<ExpertProfile> found = repository.searchAdmin(
                 EnumSet.of(ExpertProfileStatus.PENDING, ExpertProfileStatus.APPROVED, ExpertProfileStatus.REJECTED),
                 EnumSet.of(ExpertProfileStatus.PENDING, ExpertProfileStatus.REJECTED),
                 parsed,
                 term,
                 pageable
-        ).map(mapper::toAdminSummary);
+        );
+        Map<Long, ReviewSummaryResponse> stats = reviews.summaries(
+                found.getContent().stream().map(ExpertProfile::getId).toList());
+        return found.map(profile -> mapper.toAdminSummary(profile)
+                .withClientReviews(stats.getOrDefault(profile.getId(), ReviewSummaryResponse.empty())));
     }
 
     @Transactional(readOnly = true)
     public ExpertProfileResponse adminGet(Long id) {
-        return mapper.toAdmin(repository.findById(id)
+        return admin(repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Expert profile not found")));
     }
 
@@ -142,7 +157,7 @@ public class ExpertProfileService {
             profile.setReviewedAt(Instant.now());
             profile.setReviewedBy(reviewer);
             profile.setReviewNote(request != null ? request.note() : null);
-            return mapper.toAdmin(repository.save(profile));
+            return admin(repository.save(profile));
         }
         ExpertProfileRevision revision = profile.getRevision();
         if (revision != null && revision.getStatus() == ExpertProfileStatus.PENDING) {
@@ -150,7 +165,7 @@ public class ExpertProfileService {
                 throw new BadRequestException(INCOMPLETE);
             }
             publishRevision(profile, request, reviewer);
-            return mapper.toAdmin(repository.save(profile));
+            return admin(repository.save(profile));
         }
         throw new ConflictException("Only a pending profile or a pending update can be approved");
     }
@@ -164,7 +179,7 @@ public class ExpertProfileService {
             profile.setReviewedAt(Instant.now());
             profile.setReviewedBy(reviewer);
             profile.setReviewNote(request.note());
-            return mapper.toAdmin(repository.save(profile));
+            return admin(repository.save(profile));
         }
         ExpertProfileRevision revision = profile.getRevision();
         if (revision != null && revision.getStatus() == ExpertProfileStatus.PENDING) {
@@ -172,7 +187,7 @@ public class ExpertProfileService {
             revision.setReviewedAt(Instant.now());
             revision.setReviewedBy(reviewer);
             revision.setReviewNote(request.note());
-            return mapper.toAdmin(repository.save(profile));
+            return admin(repository.save(profile));
         }
         throw new ConflictException("Only a pending profile or a pending update can be rejected");
     }
@@ -336,6 +351,14 @@ public class ExpertProfileService {
         } catch (IllegalArgumentException ex) {
             throw new BadRequestException("Unknown status: " + status);
         }
+    }
+
+    private ExpertProfileResponse mine(ExpertProfile profile) {
+        return mapper.toMine(profile).withClientReviews(reviews.summary(profile.getId()));
+    }
+
+    private ExpertProfileResponse admin(ExpertProfile profile) {
+        return mapper.toAdmin(profile).withClientReviews(reviews.summary(profile.getId()));
     }
 
     private String blankToNull(String value) {

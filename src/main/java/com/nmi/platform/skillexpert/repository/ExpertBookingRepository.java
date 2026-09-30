@@ -92,4 +92,12 @@ public interface ExpertBookingRepository extends JpaRepository<ExpertBooking, Lo
             @Param("exceptId") Long exceptId,
             @Param("windowStart") Instant windowStart,
             @Param("windowEnd") Instant windowEnd);
+
+    @Query("""
+            select b.profile.id, b.status, count(b)
+            from ExpertBooking b
+            where b.profile.id in :profileIds
+            group by b.profile.id, b.status
+            """)
+    List<Object[]> countByProfileAndStatus(@Param("profileIds") Collection<Long> profileIds);
 }
