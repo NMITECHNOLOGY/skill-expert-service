@@ -1,5 +1,4 @@
 # Required environment (shell or .env next to this file):
-#   EUREKA_USERNAME / EUREKA_PASSWORD   registry credentials
 #   JWT_ISSUER_URI                      public issuer, e.g. https://api.example.com/auth
 services:
   skill-expert-service:
@@ -13,7 +12,8 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: prod
-      EUREKA_SERVER_URL: http://${EUREKA_USERNAME:?set EUREKA_USERNAME}:${EUREKA_PASSWORD:?set EUREKA_PASSWORD}@eureka-server:8761/eureka/
+      # Same registry URL as every other service. Eureka is reachable only on superapp_network.
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
       JWT_ISSUER_URI: ${JWT_ISSUER_URI:?set JWT_ISSUER_URI}
       # Key set fetched service-to-service, never via the public edge.
       JWT_JWK_SET_URI: http://nmi-auth-service:8080/oauth2/jwks

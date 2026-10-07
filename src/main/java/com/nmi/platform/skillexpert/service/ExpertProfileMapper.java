@@ -50,7 +50,11 @@ public class ExpertProfileMapper {
                 null,
                 null,
                 null,
-                false
+                false,
+                null,
+                0,
+                0,
+                null
         );
     }
 
@@ -204,7 +208,11 @@ public class ExpertProfileMapper {
                 completion(profile.getPhotoUri(), profile.getBio(), skills, profile.getPortfolio(), profile.getServices()),
                 profile.getStatus() == ExpertProfileStatus.APPROVED,
                 null,
-                profile.isAvailable()
+                profile.isAvailable(),
+                null,
+                0,
+                0,
+                null
         );
     }
 
@@ -223,7 +231,11 @@ public class ExpertProfileMapper {
                     completion(revision.getPhotoUri(), revision.getBio(), skills, revision.getPortfolio(), revision.getServices()),
                     profile.getStatus() == ExpertProfileStatus.APPROVED,
                     revision.getStatus(),
-                    profile.isAvailable()
+                    profile.isAvailable(),
+                    null,
+                    0,
+                    0,
+                    null
             );
         }
         List<String> skills = readSkills(profile.getSkillsJson());
@@ -238,7 +250,11 @@ public class ExpertProfileMapper {
                 completion(profile.getPhotoUri(), profile.getBio(), skills, profile.getPortfolio(), profile.getServices()),
                 profile.getStatus() == ExpertProfileStatus.APPROVED,
                 revision == null ? null : revision.getStatus(),
-                profile.isAvailable()
+                profile.isAvailable(),
+                null,
+                0,
+                0,
+                null
         );
     }
 
@@ -481,7 +497,11 @@ public class ExpertProfileMapper {
                 updateStatus,
                 liveDisplayName,
                 liveJobTitle,
-                available
+                available,
+                null,
+                0,
+                0,
+                null
         );
     }
 

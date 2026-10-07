@@ -3,6 +3,7 @@ package com.nmi.platform.skillexpert.model.entity;
 import java.time.Instant;
 
 import com.nmi.platform.skillexpert.model.enums.BookingStatus;
+import com.nmi.platform.skillexpert.model.enums.RequestKind;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -58,6 +59,17 @@ public class ExpertBooking {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 32)
     private BookingStatus status = BookingStatus.REQUESTED;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "request_kind", nullable = false, length = 16)
+    private RequestKind requestKind = RequestKind.CATALOG;
+
+    /** What the expert will do. Empty until they send an offer on a custom job. */
+    @Column(name = "proposal_note", length = 1000)
+    private String proposalNote;
+
+    @Column(name = "proposed_at")
+    private Instant proposedAt;
 
     /** Platform payment reference after the customer pays through the super app checkout. */
     @Column(name = "payment_reference", length = 64)

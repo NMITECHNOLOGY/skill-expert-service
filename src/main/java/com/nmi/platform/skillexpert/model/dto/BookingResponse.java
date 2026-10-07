@@ -3,6 +3,7 @@ package com.nmi.platform.skillexpert.model.dto;
 import java.time.Instant;
 
 import com.nmi.platform.skillexpert.model.enums.BookingStatus;
+import com.nmi.platform.skillexpert.model.enums.RequestKind;
 
 public record BookingResponse(
         Long id,
@@ -19,5 +20,8 @@ public record BookingResponse(
         BookingStatus status,
         Instant createdAt,
         String paymentReference,
-        String merchantId
+        String merchantId,
+        RequestKind requestKind,
+        String proposalNote,
+        Instant proposedAt
 ) {}
