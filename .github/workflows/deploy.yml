@@ -69,21 +69,18 @@ jobs:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         env:
-          EUREKA_USERNAME: ${{ secrets.EUREKA_USERNAME }}
-          EUREKA_PASSWORD: ${{ secrets.EUREKA_PASSWORD }}
           JWT_ISSUER_URI: ${{ secrets.JWT_ISSUER_URI }}
         with:
           host: ${{ secrets.AWS_HOST }}
           username: ${{ secrets.AWS_USERNAME }}
           key: ${{ secrets.AWS_PRIVATE_KEY }}
-          envs: EUREKA_USERNAME,EUREKA_PASSWORD,JWT_ISSUER_URI
+          envs: JWT_ISSUER_URI
           script: |
             set -euo pipefail
             docker network create superapp_network || true
             cd ~/skill-expert-service
             umask 077
-            printf 'EUREKA_USERNAME=%s\nEUREKA_PASSWORD=%s\nJWT_ISSUER_URI=%s\n' \
-              "$EUREKA_USERNAME" "$EUREKA_PASSWORD" "$JWT_ISSUER_URI" > .env
+            printf 'JWT_ISSUER_URI=%s\n' "$JWT_ISSUER_URI" > .env
             umask 022
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
