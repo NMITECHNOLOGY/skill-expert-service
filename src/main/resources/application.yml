@@ -1,0 +1,78 @@
+# Author: Viraj Sachin
+# Created: 2026-10-07
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+#
+# Shared settings. Profiles: dev (default, direct calls, in-memory H2), local (Eureka + API
+# gateway, PostgreSQL), prod (deployment; required values come from the environment).
+spring:
+  application:
+    name: skill-expert-service
+  profiles:
+    default: dev
+  threads:
+    virtual:
+      enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  jackson:
+    default-property-inclusion: non_null
+    deserialization:
+      fail-on-unknown-properties: false
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:${JWT_ISSUER_URI:http://localhost:8443}}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:${JWT_JWK_SET_URI:http://localhost:8443/oauth2/jwks}}
+          # Tokens must name this service in aud; one minted for another service is rejected.
+          audiences: ${JWT_AUDIENCES:skill-expert-service}
+
+server:
+  port: ${SERVER_PORT:8086}
+  shutdown: graceful
+  tomcat:
+    # Profile saves include base64 photos and can exceed the 2MB default.
+    max-http-form-post-size: 20MB
+    max-swallow-size: 20MB
+  error:
+    include-message: never
+    include-stacktrace: never
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    healthcheck:
+      enabled: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}:${random.value}
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+      probes:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# Local sandbox merchant for Skill Expert card and points payments.
+# Same id as LocalSkillExpertClubInitializer in loyalty-service. Bill pay does not use this.
+# Replace SKILL_EXPERT_MERCHANT_ID when a real IPG merchant is connected.
+nmi:
+  skill-expert:
+    merchant-id: ${SKILL_EXPERT_MERCHANT_ID:22222222-2222-4222-8222-222222222222}
+
+logging:
+  level:
+    root: INFO
+    com.nmi.platform.skillexpert: INFO
+    org.springframework.security: INFO

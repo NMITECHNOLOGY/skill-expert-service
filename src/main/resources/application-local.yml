@@ -1,0 +1,50 @@
+# Author: Viraj Sachin
+# Created: 2026-10-07
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+# Local stack behind the API gateway (--spring.profiles.active=local). Start Eureka on :8761 first.
+
+spring:
+  config:
+    activate:
+      on-profile: local
+  cloud:
+    discovery:
+      enabled: true
+    service-registry:
+      auto-registration:
+        enabled: true
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:skill_expert_db}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:admin}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:${JWT_ISSUER_URI:http://10.0.2.2:9000}}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:${JWT_JWK_SET_URI:http://localhost:8443/oauth2/jwks}}
+
+eureka:
+  client:
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+
+logging:
+  level:
+    com.nmi.platform.skillexpert: DEBUG

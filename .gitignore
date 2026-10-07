@@ -30,6 +30,3 @@ hs_err_pid*
 replay_pid*
 .DS_Store
 
-# Spring Boot local / machine-specific config — never commit these
-**/src/main/resources/application.yml
-**/src/main/resources/application-local.yml
