@@ -1,0 +1,28 @@
+# Author: Viraj Sachin
+# Created: 2026-10-07
+# Copyright (c) 2026 NMI Infra Pvt Ltd
+#
+# Production overrides. Activated with SPRING_PROFILES_ACTIVE=prod (docker-compose.prod.yml).
+#
+# Required values are bare ${VAR} with NO default, so a missing value fails the boot instead of
+# silently trusting a development issuer. docker-compose.prod.yml supplies JWT_ISSUER_URI and
+# JWT_JWK_SET_URI.
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:${JWT_ISSUER_URI}}
+          jwk-set-uri: ${OAUTH2_JWK_SET_URI:${JWT_JWK_SET_URI}}
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.nmi.platform.skillexpert: INFO
+    org.springframework.security: WARN

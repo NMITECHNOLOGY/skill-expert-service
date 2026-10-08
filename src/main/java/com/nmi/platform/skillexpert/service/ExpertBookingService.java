@@ -13,10 +13,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import com.nmi.platform.skillexpert.integration.notification.BookingNotificationEvent;
+import com.nmi.platform.skillexpert.integration.notification.BookingNotificationEvent.Step;
 import com.nmi.platform.skillexpert.model.dto.BookingResponse;
 import com.nmi.platform.skillexpert.model.dto.CreateBookingRequest;
 import com.nmi.platform.skillexpert.model.dto.ProposeBookingRequest;
@@ -49,14 +52,17 @@ public class ExpertBookingService {
     private final ExpertBookingRepository bookings;
     private final ExpertProfileRepository profiles;
     private final String merchantId;
+    private final ApplicationEventPublisher events;
 
     public ExpertBookingService(
             ExpertBookingRepository bookings,
             ExpertProfileRepository profiles,
-            @Value("${nmi.skill-expert.merchant-id}") String merchantId) {
+            @Value("${nmi.skill-expert.merchant-id}") String merchantId,
+            ApplicationEventPublisher events) {
         this.bookings = bookings;
         this.profiles = profiles;
         this.merchantId = merchantId;
+        this.events = events;
     }
 
     @Transactional
@@ -110,7 +116,7 @@ public class ExpertBookingService {
         booking.setScheduledAt(request.scheduledAt());
         booking.setRequestKind(custom ? RequestKind.CUSTOM : RequestKind.CATALOG);
         booking.setStatus(BookingStatus.REQUESTED);
-        return toResponse(bookings.save(booking));
+        return notifying(Step.REQUESTED, bookings.save(booking));
     }
 
     @Transactional(readOnly = true)
@@ -154,7 +160,7 @@ public class ExpertBookingService {
             throw new ConflictException("This request is no longer waiting for that step.");
         }
         assertAcceptSlot(booking);
-        return transition(booking, BookingStatus.REQUESTED, BookingStatus.CONFIRMED);
+        return notifying(Step.CONFIRMED, transition(booking, BookingStatus.REQUESTED, BookingStatus.CONFIRMED));
     }
 
     @Transactional
@@ -182,7 +188,7 @@ public class ExpertBookingService {
         booking.setScheduledAt(when);
         assertAcceptSlot(booking);
         booking.setStatus(BookingStatus.PROPOSED);
-        return toResponse(bookings.save(booking));
+        return notifying(Step.OFFERED, bookings.save(booking));
     }
 
     @Transactional
@@ -197,12 +203,13 @@ public class ExpertBookingService {
         }
         assertAcceptSlot(booking);
         booking.setStatus(BookingStatus.CONFIRMED);
-        return toResponse(bookings.save(booking));
+        return notifying(Step.OFFER_ACCEPTED, bookings.save(booking));
     }
 
     @Transactional
     public BookingResponse decline(String expertUserId, Long bookingId) {
-        return transition(loadForExpert(expertUserId, bookingId), BookingStatus.REQUESTED, BookingStatus.DECLINED);
+        return notifying(Step.DECLINED,
+                transition(loadForExpert(expertUserId, bookingId), BookingStatus.REQUESTED, BookingStatus.DECLINED));
     }
 
     @Transactional
@@ -215,7 +222,7 @@ public class ExpertBookingService {
                 && !StringUtils.hasText(booking.getPaymentReference())) {
             throw new ConflictException("The customer has not paid yet.");
         }
-        return transition(booking, BookingStatus.CONFIRMED, BookingStatus.COMPLETED);
+        return notifying(Step.COMPLETED, transition(booking, BookingStatus.CONFIRMED, BookingStatus.COMPLETED));
     }
 
     @Transactional
@@ -234,7 +241,7 @@ public class ExpertBookingService {
             throw new ConflictException("This request can no longer be cancelled.");
         }
         booking.setStatus(BookingStatus.CANCELLED);
-        return toResponse(bookings.save(booking));
+        return notifying(Step.CANCELLED, bookings.save(booking));
     }
 
     @Transactional
@@ -258,7 +265,7 @@ public class ExpertBookingService {
             throw new ConflictException("This payment is already linked to a booking.");
         }
         booking.setPaymentReference(reference);
-        return toResponse(bookings.save(booking));
+        return notifying(Step.PAID, bookings.save(booking));
     }
 
     private void assertKnownService(ExpertProfile profile, String serviceTitle, String price) {
@@ -344,12 +351,18 @@ public class ExpertBookingService {
         return value.trim().toLowerCase(Locale.ROOT).replace("-", "");
     }
 
-    private BookingResponse transition(ExpertBooking booking, BookingStatus from, BookingStatus to) {
+    private ExpertBooking transition(ExpertBooking booking, BookingStatus from, BookingStatus to) {
         if (booking.getStatus() != from) {
             throw new ConflictException("This request is no longer waiting for that step.");
         }
         booking.setStatus(to);
-        return toResponse(bookings.save(booking));
+        return bookings.save(booking);
+    }
+
+    /** Tells the other party (in-app notification, sent after commit) and returns the response. */
+    private BookingResponse notifying(Step step, ExpertBooking booking) {
+        events.publishEvent(BookingNotificationEvent.of(step, booking));
+        return toResponse(booking);
     }
 
     private ExpertBooking loadForExpert(String expertUserId, Long bookingId) {
