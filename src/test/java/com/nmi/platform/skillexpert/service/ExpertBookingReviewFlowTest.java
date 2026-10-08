@@ -70,6 +70,7 @@ class ExpertBookingReviewFlowTest {
 
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(member(expertId)))
                 .andExpect(status().isOk());
+        pay(bookingId, "rate-seeker");
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/complete").with(member(expertId)))
                 .andExpect(status().isOk());
 
@@ -216,9 +217,21 @@ class ExpertBookingReviewFlowTest {
         int bookingId = request(profileId, customerId);
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(member(expertId)))
                 .andExpect(status().isOk());
+        pay(bookingId, customerId);
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/complete").with(member(expertId)))
                 .andExpect(status().isOk());
         return bookingId;
+    }
+
+    private int payments;
+
+    /** Listed services carry the expert's price, so a job is paid before it can be finished. */
+    private void pay(int bookingId, String customerId) throws Exception {
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer(customerId))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-REVIEW-" + bookingId + "-" + (++payments) + "\"}"))
+                .andExpect(status().isOk());
     }
 
     private int approve(String userId) throws Exception {

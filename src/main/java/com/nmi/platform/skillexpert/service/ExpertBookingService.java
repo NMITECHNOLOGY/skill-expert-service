@@ -97,12 +97,15 @@ public class ExpertBookingService {
         String serviceTitle = request.serviceTitle().trim();
         boolean custom = Boolean.TRUE.equals(request.custom());
         String note = blankToNull(request.note());
+        String price = null;
         if (custom) {
             if (note == null) {
                 throw new BadRequestException("Describe what you need.");
             }
         } else {
-            assertKnownService(profile, serviceTitle, request.price());
+            // The expert's listed price, never the customer's: leaving it out of the request must
+            // not turn a paid service into a free one.
+            price = listedPrice(profile, serviceTitle, request.price());
         }
         assertCreateSlot(profile, customerUserId, when);
         ExpertBooking booking = new ExpertBooking();
@@ -110,7 +113,7 @@ public class ExpertBookingService {
         booking.setCustomerUserId(customerUserId);
         booking.setCustomerName(trimTo(preferredCustomerName(request.customerName(), customerName), 200, "Customer"));
         booking.setServiceTitle(serviceTitle);
-        booking.setPrice(custom ? null : blankToNull(request.price()));
+        booking.setPrice(price);
         booking.setAddress(address);
         booking.setNote(note);
         booking.setScheduledAt(request.scheduledAt());
@@ -268,23 +271,33 @@ public class ExpertBookingService {
         return notifying(Step.PAID, bookings.save(booking));
     }
 
-    private void assertKnownService(ExpertProfile profile, String serviceTitle, String price) {
+    /**
+     * @param profile      expert being booked
+     * @param serviceTitle service the customer picked
+     * @param price        price the customer saw; optional, but must match when sent
+     * @return the price to book at: the listed one, or the customer's when the expert lists no
+     *         services (or no price for this one)
+     */
+    private String listedPrice(ExpertProfile profile, String serviceTitle, String price) {
         List<ExpertServiceItem> offered = profile.getServices();
         if (offered == null || offered.isEmpty()) {
-            return;
+            return blankToNull(price);
         }
         ExpertServiceItem match = offered.stream()
                 .filter(item -> item.getTitle() != null && item.getTitle().trim().equalsIgnoreCase(serviceTitle))
                 .findFirst()
                 .orElseThrow(() -> new BadRequestException("Pick one of this expert's services."));
-        if (!StringUtils.hasText(price) || !StringUtils.hasText(match.getPrice())) {
-            return;
+        if (!StringUtils.hasText(match.getPrice())) {
+            return blankToNull(price);
         }
-        BigDecimal asked = amountOf(price);
-        BigDecimal listed = amountOf(match.getPrice());
-        if (asked != null && listed != null && asked.compareTo(listed) != 0) {
-            throw new BadRequestException("That price does not match this service.");
+        if (StringUtils.hasText(price)) {
+            BigDecimal asked = amountOf(price);
+            BigDecimal listed = amountOf(match.getPrice());
+            if (asked != null && listed != null && asked.compareTo(listed) != 0) {
+                throw new BadRequestException("That price does not match this service.");
+            }
         }
+        return match.getPrice().trim();
     }
 
     /** Seeker is asking. Messages are written for that person. */

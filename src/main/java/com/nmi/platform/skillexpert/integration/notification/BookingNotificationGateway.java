@@ -15,11 +15,14 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Tells the other party about a booking step through notification-service (source skill-expert,
@@ -36,6 +39,7 @@ public class BookingNotificationGateway {
 
     private static final Logger log = LoggerFactory.getLogger(BookingNotificationGateway.class);
     private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("MMM d, h:mm a", Locale.ENGLISH);
+    private static final Pattern AMOUNT = Pattern.compile("(\\d+(?:\\.\\d+)?)");
 
     private final NotificationClient client;
     private final SkillExpertNotificationProperties properties;
@@ -71,7 +75,8 @@ public class BookingNotificationGateway {
         String customer = blankOr(event.customerName(), "A customer");
         String expert = blankOr(event.expertName(), "Your expert");
         String when = event.scheduledAt() == null ? "" : " on " + WHEN.format(event.scheduledAt().atZone(zone));
-        String price = event.price() == null || event.price().isBlank() ? "" : " (" + event.price().trim() + ")";
+        String amount = formatPrice(event.price());
+        String price = amount == null ? "" : " (" + amount + ")";
 
         String title;
         String body;
@@ -86,11 +91,12 @@ public class BookingNotificationGateway {
             }
             case CONFIRMED -> {
                 title = "Booking confirmed";
-                body = expert + " confirmed " + service + when + ".";
+                body = expert + " confirmed " + service + when + "."
+                        + (amount == null ? "" : " Pay " + amount + " to secure it.");
             }
             case OFFER_ACCEPTED -> {
                 title = "Offer accepted";
-                body = customer + " accepted your offer for " + service + when + ".";
+                body = customer + " accepted your offer for " + service + price + when + ".";
             }
             case DECLINED -> {
                 title = "Booking declined";
@@ -102,7 +108,7 @@ public class BookingNotificationGateway {
             }
             case PAID -> {
                 title = "Booking paid";
-                body = customer + " paid for " + service + when + ".";
+                body = customer + " paid " + (amount == null ? "" : amount + " ") + "for " + service + when + ".";
             }
             case COMPLETED -> {
                 title = "Job completed";
@@ -114,6 +120,28 @@ public class BookingNotificationGateway {
         attributes.put("bookingId", String.valueOf(event.bookingId()));
         attributes.put("step", event.step().name());
         return new InAppNotificationRequest(event.recipient(), TYPE, title, body, attributes, DEEP_LINK, SOURCE);
+    }
+
+    /**
+     * Prices are stored as typed ("2500", "LKR 25,000"). Notifications show one format, the same as
+     * payment-service: "LKR 2,500.00".
+     *
+     * @param price price as entered; may be null
+     * @return formatted amount, the trimmed text when it has no number, or null when blank
+     */
+    static String formatPrice(String price) {
+        if (price == null || price.isBlank()) {
+            return null;
+        }
+        Matcher number = AMOUNT.matcher(price.replace(",", ""));
+        if (!number.find()) {
+            return price.trim();
+        }
+        try {
+            return String.format(Locale.ENGLISH, "LKR %,.2f", new BigDecimal(number.group(1)));
+        } catch (NumberFormatException ex) {
+            return price.trim();
+        }
     }
 
     private static String blankOr(String value, String fallback) {
