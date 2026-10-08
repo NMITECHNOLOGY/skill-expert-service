@@ -53,13 +53,40 @@ class BookingNotificationGatewayTest {
     @Test
     void eachStepReadsNaturally() {
         assertThat(BookingNotificationGateway.request(event(Step.OFFERED, 1), COLOMBO).body())
-                .isEqualTo("Viraj sent a price for Leak repair (LKR 2,500) on Oct 9, 10:00 AM. Review and accept it to confirm.");
+                .isEqualTo("Viraj sent a price for Leak repair (LKR 2,500.00) on Oct 9, 10:00 AM. Review and accept it to confirm.");
         assertThat(BookingNotificationGateway.request(event(Step.CONFIRMED, 0), COLOMBO).title())
                 .isEqualTo("Booking confirmed");
+        assertThat(BookingNotificationGateway.request(event(Step.CONFIRMED, 0), COLOMBO).body())
+                .isEqualTo("Viraj confirmed Leak repair on Oct 9, 10:00 AM. Pay LKR 2,500.00 to secure it.");
+        assertThat(BookingNotificationGateway.request(event(Step.OFFER_ACCEPTED, 0), COLOMBO).body())
+                .isEqualTo("Dilshan accepted your offer for Leak repair (LKR 2,500.00) on Oct 9, 10:00 AM.");
         assertThat(BookingNotificationGateway.request(event(Step.DECLINED, 0), COLOMBO).body())
                 .isEqualTo("Viraj can't take Leak repair on Oct 9, 10:00 AM. Try another expert.");
+        assertThat(BookingNotificationGateway.request(event(Step.CANCELLED, 0), COLOMBO).body())
+                .isEqualTo("Dilshan cancelled Leak repair on Oct 9, 10:00 AM.");
+        assertThat(BookingNotificationGateway.request(event(Step.PAID, 0), COLOMBO).body())
+                .isEqualTo("Dilshan paid LKR 2,500.00 for Leak repair on Oct 9, 10:00 AM.");
         assertThat(BookingNotificationGateway.request(event(Step.COMPLETED, 0), COLOMBO).body())
                 .isEqualTo("Viraj marked Leak repair as done. Rate your experience.");
+    }
+
+    @Test
+    void pricesReadTheSameWhateverWasTyped() {
+        assertThat(BookingNotificationGateway.formatPrice("2500")).isEqualTo("LKR 2,500.00");
+        assertThat(BookingNotificationGateway.formatPrice("LKR 25,000")).isEqualTo("LKR 25,000.00");
+        assertThat(BookingNotificationGateway.formatPrice("Rs. 1500.5")).isEqualTo("LKR 1,500.50");
+        assertThat(BookingNotificationGateway.formatPrice("Free")).isEqualTo("Free");
+        assertThat(BookingNotificationGateway.formatPrice("  ")).isNull();
+        assertThat(BookingNotificationGateway.formatPrice(null)).isNull();
+    }
+
+    @Test
+    void anUnpricedBookingLeavesTheAmountOut() {
+        BookingNotificationEvent unpriced = new BookingNotificationEvent(Step.CONFIRMED, 42L, "user-1", "Dilshan",
+                "Viraj", "Leak repair", null, VISIT, 0);
+
+        assertThat(BookingNotificationGateway.request(unpriced, COLOMBO).body())
+                .isEqualTo("Viraj confirmed Leak repair on Oct 9, 10:00 AM.");
     }
 
     @Test
