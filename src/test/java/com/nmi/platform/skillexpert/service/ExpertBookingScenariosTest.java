@@ -361,6 +361,7 @@ class ExpertBookingScenariosTest {
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(member(expertId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"));
+        pay(bookingId, "done-seeker");
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/complete").with(member(expertId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("COMPLETED"));
@@ -475,6 +476,7 @@ class ExpertBookingScenariosTest {
         int finished = request(profileId, "pay-closed-seeker");
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + finished + "/accept").with(member(expertId)))
                 .andExpect(status().isOk());
+        pay(finished, "pay-closed-seeker");
         mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + finished + "/complete").with(member(expertId)))
                 .andExpect(status().isOk());
         mockMvc.perform(post("/api/v1/skill-experts/bookings/" + finished + "/payment")
@@ -670,6 +672,31 @@ class ExpertBookingScenariosTest {
                 .andExpect(status().isOk())
                 .andReturn();
         return JsonPath.parse(booked.getResponse().getContentAsString()).read("$.id", Integer.class);
+    }
+
+    private int payments;
+
+    /** Pays a confirmed booking: listed services carry the expert's price, so a job is paid before it is done. */
+    private void pay(int bookingId, String customerId) throws Exception {
+        mockMvc.perform(post("/api/v1/skill-experts/bookings/" + bookingId + "/payment")
+                        .with(customer(customerId, "VERIFIED"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paymentReference\":\"PAY-SCENARIO-" + bookingId + "-" + (++payments) + "\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void theListedPriceIsChargedEvenWhenTheRequestLeavesItOut() throws Exception {
+        String expertId = "price-expert";
+        int profileId = approve(expertId);
+        int bookingId = request(profileId, "price-seeker");
+
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/accept").with(member(expertId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.price").value("LKR 2500"));
+        mockMvc.perform(put("/api/v1/skill-experts/me/bookings/" + bookingId + "/complete").with(member(expertId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("The customer has not paid yet."));
     }
 
     private int hoursAhead = 24;
