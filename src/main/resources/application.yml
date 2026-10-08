@@ -71,6 +71,19 @@ nmi:
   skill-expert:
     merchant-id: ${SKILL_EXPERT_MERCHANT_ID:22222222-2222-4222-8222-222222222222}
 
+# In-app booking updates (request, offer, confirm, decline, cancel, paid, done) through
+# notification-service, sent with this service's own client_credentials token.
+# Off until AUTH_CLIENT_SKILL_EXPERT_SERVICE_SECRET is set.
+skill-expert:
+  notifications:
+    enabled: ${SKILL_EXPERT_NOTIFICATIONS_ENABLED:true}
+    client-id: skill-expert-service
+    client-secret: ${AUTH_CLIENT_SKILL_EXPERT_SERVICE_SECRET:}
+    auth-base-url: ${AUTHORIZATION_SERVICE_URL:http://localhost:8443}
+    base-url: ${NOTIFICATION_SERVICE_URL:}
+    service-id: notification-service
+    time-zone: ${SKILL_EXPERT_TIME_ZONE:Asia/Colombo}
+
 logging:
   level:
     root: INFO

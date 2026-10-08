@@ -2,6 +2,9 @@ spring:
   config:
     activate:
       on-profile: dev
+    # Local service-to-service secrets (AUTH_CLIENT_*_SECRET) from a file outside the repo, so
+    # IDE runs work without env vars. Optional: missing file = env vars only.
+    import: optional:file:${user.home}/.nmi/local-service-secrets.properties
   datasource:
     url: jdbc:h2:mem:skill_expert;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
     username: sa
@@ -34,3 +37,8 @@ eureka:
     enabled: false
     register-with-eureka: false
     fetch-registry: false
+
+# No Eureka on dev: call notification-service directly.
+skill-expert:
+  notifications:
+    base-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8091}

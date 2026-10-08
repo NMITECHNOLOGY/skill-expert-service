@@ -7,6 +7,9 @@ spring:
   config:
     activate:
       on-profile: local
+    # Local service-to-service secrets (AUTH_CLIENT_*_SECRET) from a file outside the repo, so
+    # IDE runs work without env vars. Optional: missing file = env vars only.
+    import: optional:file:${user.home}/.nmi/local-service-secrets.properties
   cloud:
     discovery:
       enabled: true
