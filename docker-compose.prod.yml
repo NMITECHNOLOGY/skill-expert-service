@@ -14,6 +14,8 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       # Same registry URL as every other service. Eureka is reachable only on superapp_network.
       EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      # Base config leaves Eureka off; production registers and discovers through it.
+      EUREKA_CLIENT_ENABLED: "true"
       JWT_ISSUER_URI: ${JWT_ISSUER_URI:?set JWT_ISSUER_URI}
       # Key set fetched service-to-service, never via the public edge.
       JWT_JWK_SET_URI: http://nmi-auth-service:8080/oauth2/jwks

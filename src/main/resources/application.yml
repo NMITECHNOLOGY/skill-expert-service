@@ -40,6 +40,11 @@ server:
 
 eureka:
   client:
+    # Off unless a profile turns it on: local registers with Eureka; prod sets
+    # EUREKA_CLIENT_ENABLED=true. dev and plain runs call services directly.
+    enabled: ${EUREKA_CLIENT_ENABLED:false}
+    register-with-eureka: ${EUREKA_CLIENT_ENABLED:false}
+    fetch-registry: ${EUREKA_CLIENT_ENABLED:false}
     service-url:
       defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
     healthcheck:
